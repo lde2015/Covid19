@@ -75,7 +75,7 @@ def plot_courbes_departements(df_type_data, Donnée, df, dict_labels, local):
     fig = px.line(df, x="date", y=colonne, color="legend", facet_col='nom_region', facet_col_wrap=3,
                   labels=(dict_labels), hover_name="nom_departement", 
                   title="COVID 19 - Evolution par région départements",
-                  width=1500, height=2000, 
+                  width=1500, height=1500, 
                   category_orders=({'nom_region': list(np.sort(df['nom_region'].unique())),
                                     'legend': list(np.sort(df['legend'].unique()))}))             
     fig.update_layout(title_x = 0.5, showlegend=True)
