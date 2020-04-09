@@ -4,4 +4,4 @@
 
 You can run this repo in a Jupyter Notebook on Binder by clicking on the following button :
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://gesis.mybinder.org/binder/v2/gh/lde2015/Covid19/f53cc897e764a802f0733833d9cc17b9c7309044?filepath=geo_covid.ipynb)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://gesis.mybinder.org/binder/v2/gh/lde2015/Covid19/ea555ff120af129f1bbe9ed482cfad5bb12e2df3?filepath=geo_covid.ipynb)
