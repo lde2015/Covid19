@@ -78,10 +78,12 @@ def plot_courbes_departements(df_type_data, Donnée, df, dict_labels, local):
                   width=1500, height=1500, 
                   category_orders=({'nom_region': list(np.sort(df['nom_region'].unique())),
                                     'legend': list(np.sort(df['legend'].unique()))}))             
-    fig.update_layout(title_x = 0.5, showlegend=True)
+    fig.update_layout(title_x = 0.5, showlegend=True, legend=dict(font=dict(size=10)))
     fig.update_yaxes(title_text=Donnée)
     fig.update_xaxes(showticklabels=True)
     fig.update_yaxes(matches=None)
+    fig.update_yaxes(showticklabels=True, col=2)
+    fig.update_yaxes(showticklabels=True, col=3)
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 
     fig['layout']['yaxis2']['title']['text']=''
@@ -124,19 +126,27 @@ def plot_carte(df_type_data, Donnée, Zone, df_hors_paris, df_paris, geo, local)
                         animation_frame="jour",
                         hover_name="infos",
                         color_continuous_scale=px.colors.sequential.RdBu_r,
-                        range_color=[min, max]
+                        range_color=[min, max],
+                        labels={'hosp':'Nb personnes', 'rea':'Nb personnes', 'rad':'Nb personnes',
+                                'dc':'Nb personnes'}
                        )
 
     fig.update_geos(fitbounds="locations", visible=False)
-    #fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
     fig.update_layout(
-   #     title_text = "COVID 19 - Evolution "+lib_zone+" - "+Donnée,
+        title_text = "COVID 19 - Evolution",
         title_x = 0.5,
         geo=dict(
             showframe = False,
             showcoastlines = False,
-            projection_type = 'mercator'
-        )
+            projection_type = 'mercator'),
+            width=800,
+        height=800,
+        margin=dict(
+            l= 0,
+            r= 0,
+            b= 0,
+            #t= 0,
+            pad= 2)
     )
     fig.show()
     if local != ".":
