@@ -64,7 +64,8 @@ def plot_courbes_regions(df_type_data, Donnée, df_agg_reg, dict_labels, local):
     fig.update_layout(title_x = 0.5)
     fig.update_yaxes(title_text=Donnée)
     fig.show()
-    fig.write_html(local+'/Output/Evol_'+colonne+'_par_region.html', auto_open=False)
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_'+colonne+'_par_region.html', auto_open=False)
 
 
 
@@ -98,7 +99,8 @@ def plot_courbes_departements(df_type_data, Donnée, df, dict_labels, local):
 
 
     fig.show()
-    fig.write_html(local+'/Output/Evol_'+colonne+'_par_region_dept.html', auto_open=False)
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_'+colonne+'_par_region_dept.html', auto_open=False)
 
 
 
@@ -137,4 +139,5 @@ def plot_carte(df_type_data, Donnée, Zone, df_hors_paris, df_paris, geo, local)
         )
     )
     fig.show()
-    fig.write_html(local+'/Output/Evol_'+colonne+'_'+Zone.replace(' ','_')+'.html', auto_open=False)
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_'+colonne+'_'+Zone.replace(' ','_')+'.html', auto_open=False)
