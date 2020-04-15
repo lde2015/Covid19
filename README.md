@@ -6,4 +6,4 @@ You can run this repo in a Jupyter Notebook on Binder by clicking on the followi
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/lde2015/Covid19)
 
-#### ! !!! [ Farmers Market Finder Demo](Output/test_gif.gif)
+
