@@ -1,6 +1,7 @@
 # Covid-19 - Interactive visualizations for monitoring evolution in France
 
 ![example](Example.gif)
+![example](Example2.gif)
 
 ## How to use this?
 
