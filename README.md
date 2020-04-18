@@ -1,4 +1,4 @@
-# Covid19 - Interactive visualizations for monitoring evolution in France
+# Covid-19 - Interactive visualizations for monitoring evolution in France
 
 ![example](Example.gif)
 
