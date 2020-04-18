@@ -1,5 +1,7 @@
 # Covid19 - Interactive visualizations for monitoring evolution in France
 
+![example](Example.gif)
+
 ## How to use this?
 
 You can run this repo in a Jupyter Notebook on Binder by clicking on the following button :
