@@ -230,7 +230,7 @@ def plot_heatmap_regions(df_new_agg_reg, local, Zone, show='O'):
                         shared_yaxes=True)
 
     fig.add_trace(go.Heatmap(
-        z=df_plot['incid_rea'],
+        z=df_plot['incid_hosp'],
         x=df_plot['date'],
         y=df_plot['nom_region'],
         name="Hosp. +",
@@ -250,7 +250,7 @@ def plot_heatmap_regions(df_new_agg_reg, local, Zone, show='O'):
     )
 
     fig.add_trace(go.Heatmap(
-        z=df_plot['incid_rea'],
+        z=df_plot['incid_dc'],
         x=df_plot['date'],
         y=df_plot['nom_region'],
         name="Décès +",
@@ -303,7 +303,7 @@ def plot_heatmap_departements(df_new, local, Zone, show='O'):
                         shared_yaxes=True)
 
     fig.add_trace(go.Heatmap(
-        z=df_plot['incid_rea'],
+        z=df_plot['incid_hosp'],
         x=df_plot['date'],
         y=[df_plot['nom_region'], df_plot['infos_dept']],
         name="Hosp. +",
@@ -323,7 +323,7 @@ def plot_heatmap_departements(df_new, local, Zone, show='O'):
     )
 
     fig.add_trace(go.Heatmap(
-        z=df_plot['incid_rea'],
+        z=df_plot['incid_dc'],
         x=df_plot['date'],
         y=[df_plot['nom_region'], df_plot['infos_dept']],
         name="Décès +",
