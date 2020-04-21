@@ -12,10 +12,11 @@ from ipywidgets import interact
 
 #----------------------------------------------------------------------------------------------------------------------------
 # Chargement des données
-def charge(local, nb_jours):
+def charge(local, nb_jours, ratio=10000):
     # Source : # Source : https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/
 
     # Les méta données
+    lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
     df_meta = pd.read_csv(local+'/Data/metadonnees-donnees-hospitalieres-covid19.csv', sep=';')
     df_type_data = pd.DataFrame({'colonne': ['hosp','rea','rad','dc'], 
                                 'type_data': ['Nb actuellement hospitalisés',
@@ -24,7 +25,9 @@ def charge(local, nb_jours):
                                             "Nb cumulé de décés à l'hôpital"]})
     dict_labels = {'legend':'Région - Département', 'nom_region':'Région', 'nom_departement': 'Département',
                 'date':'Date', 'hosp':'Nb actuellement hospitalisés','rea':'Nb actuellement en réanimation',
-                'rad':'Nb cumulé de retours à domicile','dc':"Nb cumulé de décés à l'hôpital"}
+                'rad':'Nb cumulé de retours à domicile','dc':"Nb cumulé de décés à l'hôpital",
+                'hosp_ratio':"Ratio /"+lib_ratio+" hospitalisés", 'rea_ratio':"Ratio /"+lib_ratio+" en réanimation",
+                'dc_ratio':"Ratio /"+lib_ratio+" décédés"}
     # Les données
     df = pd.read_csv(local+'/Data/data.csv', sep=';')
     df = df[df.sexe == 0] # On ne considère que le niveau glov=bal
@@ -56,6 +59,10 @@ def charge(local, nb_jours):
     df['legend'] = df['nom_region'] + " - " + df['nom_departement']
     df['date'] = pd.to_datetime(df['jour'], format='%Y-%m-%d')
     df.dropna(inplace=True)
+    df['hosp_ratio'] = df.apply(lambda x: np.round(x['hosp']*ratio/x['population'], 2), axis=1)
+    df['rea_ratio'] = df.apply(lambda x: np.round(x['rea']*ratio/x['population'], 2), axis=1)
+    df['rad_ratio'] = df.apply(lambda x: np.round(x['rad']*ratio/x['population'], 2), axis=1)
+    df['dc_ratio'] = df.apply(lambda x: np.round(x['dc']*ratio/x['population'], 2), axis=1)
 
     df_new = pd.merge(df_new, df_dept, left_on='dep', right_on='code_departement', how='left')
     df_new['infos_dept'] = df_new['code_departement'] + " " + df_new['nom_departement']
@@ -73,10 +80,10 @@ def charge(local, nb_jours):
     df_new = df_new[df_new.date >= date_deb]
     df_new_agg_reg = df_new_agg_reg[df_new_agg_reg.date >= date_deb]
 
-    df_agg_reg['hosp_pct'] = df_agg_reg.apply(lambda x: np.round(x['hosp']*100/x['population'], 2), axis=1)
-    df_agg_reg['rea_pct'] = df_agg_reg.apply(lambda x: np.round(x['rea']*100/x['population'], 2), axis=1)
-    df_agg_reg['rad_pct'] = df_agg_reg.apply(lambda x: np.round(x['rad']*100/x['population'], 2), axis=1)
-    df_agg_reg['dc_pct'] = df_agg_reg.apply(lambda x: np.round(x['dc']*100/x['population'], 2), axis=1)
+    df_agg_reg['hosp_ratio'] = df_agg_reg.apply(lambda x: np.round(x['hosp']*ratio/x['population'], 2), axis=1)
+    df_agg_reg['rea_ratio'] = df_agg_reg.apply(lambda x: np.round(x['rea']*ratio/x['population'], 2), axis=1)
+    df_agg_reg['rad_ratio'] = df_agg_reg.apply(lambda x: np.round(x['rad']*ratio/x['population'], 2), axis=1)
+    df_agg_reg['dc_ratio'] = df_agg_reg.apply(lambda x: np.round(x['dc']*ratio/x['population'], 2), axis=1)
 
     return df_type_data, df_agg_reg, df, df_hors_paris, df_paris, df_new, df_new_agg_reg, dict_labels, geo
 
@@ -100,20 +107,21 @@ def plot_courbes_regions(df_type_data, Donnée, df_agg_reg, dict_labels, local, 
 
 
 #----------------------------------------------------------------------------------------------------------------------------
-def plot_courbes_regions_pct(df_type_data, Donnée, df_agg_reg, dict_labels, local, show='O'):
-    colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_pct"
+def plot_courbes_regions_ratio(df_type_data, Donnée, df_agg_reg, dict_labels, local, ratio=10000, show='O'):
+    colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_ratio"
+    lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
     fig = px.line(df_agg_reg, x="date", y=colonne, color="nom_region", labels=(dict_labels),
                   hover_name="nom_region", 
-                  title='COVID 19 - Evolution par région - '+Donnée,
+                  title='COVID 19 - Evolution par région - '+Donnée+ ' : ratio pour '+lib_ratio+' habitants',
                   category_orders=({'nom_region': list(np.sort(df_agg_reg['nom_region'].unique()))}))
     fig.update_layout(title_x = 0.5)
-    fig.update_yaxes(title_text=Donnée)
+    fig.update_yaxes(title_text=Donnée + " pour " + lib_ratio)
 
     if show == 'O':
         fig.show()
     
     if local != ".":
-        fig.write_html(local+'/Output/Evol_'+colonne+'_pct_par_region.html', auto_open=False)
+        fig.write_html(local+'/Output/Evol_'+colonne+'_ratio_par_region.html', auto_open=False)
     return fig, colonne
 
 
@@ -155,6 +163,45 @@ def plot_courbes_departements(df_type_data, Donnée, df, dict_labels, local, sho
 
     return fig, colonne
 
+
+#----------------------------------------------------------------------------------------------------------------------------
+def plot_courbes_departements_ratio(df_type_data, Donnée, df, dict_labels, local, ratio=10000, show='O'):
+    colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_ratio"
+    lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
+    fig = px.line(df, x="date", y=colonne, color="legend", facet_col='nom_region', facet_col_wrap=3,
+                  labels=(dict_labels), hover_name="nom_departement", 
+                  title="COVID 19 - Evolution par région départements - "+Donnée+' : ratio pour '+lib_ratio+' habitants',
+                  width=1500, height=1500, 
+                  category_orders=({'nom_region': list(np.sort(df['nom_region'].unique())),
+                                    'legend': list(np.sort(df['legend'].unique()))}))             
+    fig.update_layout(title_x = 0.5, showlegend=True, legend=dict(font=dict(size=10)))
+    fig.update_yaxes(title_text=Donnée)
+    fig.update_xaxes(showticklabels=True)
+    fig.update_yaxes(matches=None)
+    fig.update_yaxes(showticklabels=True, col=2)
+    fig.update_yaxes(showticklabels=True, col=3)
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+
+    fig['layout']['yaxis2']['title']['text']=''
+    fig['layout']['yaxis3']['title']['text']=''
+    fig['layout']['yaxis5']['title']['text']=''
+    fig['layout']['yaxis6']['title']['text']=''
+    fig['layout']['yaxis8']['title']['text']=''
+    fig['layout']['yaxis9']['title']['text']=''
+    fig['layout']['yaxis11']['title']['text']=''
+    fig['layout']['yaxis12']['title']['text']=''
+    fig['layout']['yaxis14']['title']['text']=''
+    fig['layout']['yaxis15']['title']['text']=''
+    fig['layout']['yaxis17']['title']['text']=''
+    fig['layout']['yaxis18']['title']['text']=''
+
+    if show == 'O':
+        fig.show()
+    
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_'+colonne+'_ratio_par_region_dept.html', auto_open=False)
+
+    return fig, colonne
 
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_carte(df_type_data, Donnée, Zone, df_hors_paris, df_paris, geo, local, show='O'):
