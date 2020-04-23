@@ -9,6 +9,9 @@ from plotly.subplots import make_subplots
 from ipywidgets import widgets
 import numpy as np
 from ipywidgets import interact
+import requests
+import pandas as pd
+import io
 
 #----------------------------------------------------------------------------------------------------------------------------
 # Chargement des données
@@ -29,11 +32,15 @@ def charge(local, nb_jours, ratio=10000):
                 'hosp_ratio':"Ratio /"+lib_ratio+" hospitalisés", 'rea_ratio':"Ratio /"+lib_ratio+" en réanimation",
                 'dc_ratio':"Ratio /"+lib_ratio+" décédés"}
     # Les données
-    df = pd.read_csv(local+'/Data/data.csv', sep=';')
+    url = "https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7"
+    content = requests.get(url).content
+    df = pd.read_csv(io.StringIO(content.decode('utf-8')), sep=';')
     df = df[df.sexe == 0] # On ne considère que le niveau glov=bal
 
     # Les nouveaux cas depuis 15 jours
-    df_new = pd.read_csv(local+'/Data/new.csv', sep=';')
+    url = "https://www.data.gouv.fr/fr/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
+    content = requests.get(url).content
+    df_new = pd.read_csv(io.StringIO(content.decode('utf-8')), sep=';')
     df_new['date'] = pd.to_datetime(df_new['jour'], format='%Y-%m-%d')
 
     #-------------------------------------------------------------------------------------------------------------------
