@@ -35,7 +35,20 @@ def charge(local, nb_jours, ratio=10000):
     url = "https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7"
     content = requests.get(url).content
     df = pd.read_csv(io.StringIO(content.decode('utf-8')), sep=';')
-    df = df[df.sexe == 0] # On ne considère que le niveau glov=bal
+    df = df[df.sexe == 0] # On ne considère que le niveau global
+
+    df.dropna(inplace=True)
+    df['test'] = df['jour'].apply(lambda x: np.where(x[:4] == '2020', True, False))
+    df1 = df[df.test]
+    df2 = df[~df.test]
+    df1['date'] = pd.to_datetime(df1['jour'], format='%Y-%m-%d')
+    df2['date'] = pd.to_datetime(df2['jour'], format='%d/%m/%Y')
+    df = pd.concat([df1, df2]).sort_index()
+    df = df[df.date >= '2020-07-01']
+
+
+    df['date'] = pd.to_datetime(df['jour'], format='%Y-%m-%d')
+    df = df[df.date >= '2020-05-01']
 
     # Les nouveaux cas depuis 15 jours
     url = "https://www.data.gouv.fr/fr/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
@@ -64,7 +77,7 @@ def charge(local, nb_jours, ratio=10000):
     df.drop(columns=['dep','sexe','dept'], axis=1, inplace=True)
     df['infos'] = df['code_departement'] + " " + df['nom_departement'] + " (" + df['nom_region'] + ")"
     df['legend'] = df['nom_region'] + " - " + df['nom_departement']
-    df['date'] = pd.to_datetime(df['jour'], format='%Y-%m-%d')
+    
     df.dropna(inplace=True)
     df['hosp_ratio'] = df.apply(lambda x: np.round(x['hosp']*ratio/x['population'], 2), axis=1)
     df['rea_ratio'] = df.apply(lambda x: np.round(x['rea']*ratio/x['population'], 2), axis=1)
