@@ -13,9 +13,112 @@ import requests
 import pandas as pd
 import io
 
+
+#----------------------------------------------------------------------------------------------------------------------------
+# Chargement des meta données
+def charge_meta(local, nb_jours, ratio=10000):
+    # Source : # Source : https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/
+
+    # Les méta données
+    lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
+    df_meta = pd.read_csv(local+'/Data/metadonnees-donnees-hospitalieres-covid19.csv', sep=';')
+    df_type_data = pd.DataFrame({#'colonne': ['hosp','rea','rad','dc'], 
+                                 'colonne': ['hosp','rea','dc'], 
+                                'type_data': ['Nb actuellement hospitalisés',
+                                            'Nb actuellement en réanimation',
+                                          #  'Nb cumulé de retours à domicile',
+                                            "Nb cumulé de décés à l'hôpital"]})
+    dict_labels = {'legend':'Région - Département', 'nom_region':'Région', 'nom_departement': 'Département',
+                'date':'Date', 'hosp':'Nb actuellement hospitalisés','rea':'Nb actuellement en réanimation',
+                'rad':'Nb cumulé de retours à domicile','dc':"Nb cumulé de décés à l'hôpital",
+                'hosp_ratio':"Ratio /"+lib_ratio+" hospitalisés", 'rea_ratio':"Ratio /"+lib_ratio+" en réanimation",
+                'dc_ratio':"Ratio /"+lib_ratio+" décédés"}
+
+    # Les nouveaux cas depuis 15 jours
+    url = "https://www.data.gouv.fr/fr/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
+    content = requests.get(url).content
+    df_new = pd.read_csv(io.StringIO(content.decode('utf-8')), sep=';')
+    df_new['date'] = pd.to_datetime(df_new['jour'], format='%Y-%m-%d')
+
+    #-------------------------------------------------------------------------------------------------------------------
+    # Source : https://www.data.gouv.fr/fr/datasets/r/1c31f420-829e-489e-a19d-36cf3ef57e4a
+    # Les données départements
+    df_dept = pd.read_csv(local+'/Data/departements-france.csv')
+
+    #-------------------------------------------------------------------------------------------------------------------
+    # Source : https://www.insee.fr/fr/statistiques/1893198
+    # La population, par département
+    df_pop_dept = pd.read_csv(local+'/Data/population_dept.csv', sep=';')
+
+    #-------------------------------------------------------------------------------------------------------------------
+    # Source : https://github.com/gregoiredavid/france-geojson/blob/master/departements.geojson
+    with open(local+'/Data/dept.json') as jsonfile:
+        geo = json.load(jsonfile)
+
+    # Incorporation des infos départements au dataframe de données
+    df_new = pd.merge(df_new, df_dept, left_on='dep', right_on='code_departement', how='left')
+    df_new['infos_dept'] = df_new['code_departement'] + " " + df_new['nom_departement']
+
+    df_new_agg_reg = df_new[['nom_region','date','incid_hosp','incid_rea','incid_dc']].groupby(['nom_region','date']).aggregate('sum').reset_index()
+    date_deb = df_new_agg_reg['date'].max() - timedelta(days=nb_jours)
+    df_new = df_new[df_new.date >= date_deb]
+    df_new_agg_reg = df_new_agg_reg[df_new_agg_reg.date >= date_deb]
+
+    return df_type_data, df_new, df_new_agg_reg, dict_labels, geo, df_dept, df_pop_dept
+
+
 #----------------------------------------------------------------------------------------------------------------------------
 # Chargement des données
-def charge(local, nb_jours, ratio=10000):
+def charge_data(date_deb, df_dept, df_pop_dept, ratio=10000):
+    dte_deb = pd.to_datetime(date_deb, format='%d/%m/%Y')
+    
+    # Les données
+    url = "https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7"
+    content = requests.get(url).content
+    df = pd.read_csv(io.StringIO(content.decode('utf-8')), sep=';')
+    df = df[df.sexe == 0] # On ne considère que le niveau global
+
+    df.dropna(inplace=True)
+    df['test'] = df['jour'].apply(lambda x: np.where(x[:4] == '2020', True, False))
+    df1 = df[df.test]
+    df2 = df[~df.test]
+    df1['date'] = pd.to_datetime(df1['jour'], format='%Y-%m-%d')
+    df2['date'] = pd.to_datetime(df2['jour'], format='%d/%m/%Y')
+    df = pd.concat([df1, df2]).sort_index()
+    df = df[df.date >= dte_deb]
+
+    # Incorporation des infos départements au dataframe de données
+    df = pd.merge(df, df_dept, left_on='dep', right_on='code_departement', how='left')
+    df = pd.merge(df, df_pop_dept[['dept','population']], left_on='dep', right_on='dept', how='left')
+    df.drop(columns=['dep','sexe','dept'], axis=1, inplace=True)
+    df['infos'] = df['code_departement'] + " " + df['nom_departement'] + " (" + df['nom_region'] + ")"
+    df['legend'] = df['nom_region'] + " - " + df['nom_departement']
+    
+    df.dropna(inplace=True)
+    df['hosp_ratio'] = df.apply(lambda x: np.round(x['hosp']*ratio/x['population'], 2), axis=1)
+    df['rea_ratio'] = df.apply(lambda x: np.round(x['rea']*ratio/x['population'], 2), axis=1)
+    df['rad_ratio'] = df.apply(lambda x: np.round(x['rad']*ratio/x['population'], 2), axis=1)
+    df['dc_ratio'] = df.apply(lambda x: np.round(x['dc']*ratio/x['population'], 2), axis=1)
+
+    # Séparation Paris / hors Paris
+    df_hors_paris = df[df['nom_region'] != "Ile-de-France"]
+    df_paris = df[df['nom_region'] == "Ile-de-France"]
+
+    # Aggrégation niveau régions
+    df_agg_reg = df[['nom_region','date','hosp','rea','rad','dc','population']].groupby(['nom_region','date']).aggregate('sum').reset_index()
+    #regions = list(df_agg_reg['nom_region'].unique())
+
+    df_agg_reg['hosp_ratio'] = df_agg_reg.apply(lambda x: np.round(x['hosp']*ratio/x['population'], 2), axis=1)
+    df_agg_reg['rea_ratio'] = df_agg_reg.apply(lambda x: np.round(x['rea']*ratio/x['population'], 2), axis=1)
+    df_agg_reg['rad_ratio'] = df_agg_reg.apply(lambda x: np.round(x['rad']*ratio/x['population'], 2), axis=1)
+    df_agg_reg['dc_ratio'] = df_agg_reg.apply(lambda x: np.round(x['dc']*ratio/x['population'], 2), axis=1)
+
+    return df_agg_reg, df, df_hors_paris, df_paris
+
+
+#----------------------------------------------------------------------------------------------------------------------------
+# Chargement des meta données et des données
+def charge(local, nb_jours, date_deb, ratio=10000):
     # Source : # Source : https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/
 
     # Les méta données
@@ -37,6 +140,7 @@ def charge(local, nb_jours, ratio=10000):
     df = pd.read_csv(io.StringIO(content.decode('utf-8')), sep=';')
     df = df[df.sexe == 0] # On ne considère que le niveau global
 
+    dt_deb = pd.to_datetime(date_deb, format='%d/%m/%Y')
     df.dropna(inplace=True)
     df['test'] = df['jour'].apply(lambda x: np.where(x[:4] == '2020', True, False))
     df1 = df[df.test]
@@ -44,11 +148,7 @@ def charge(local, nb_jours, ratio=10000):
     df1['date'] = pd.to_datetime(df1['jour'], format='%Y-%m-%d')
     df2['date'] = pd.to_datetime(df2['jour'], format='%d/%m/%Y')
     df = pd.concat([df1, df2]).sort_index()
-    df = df[df.date >= '2020-07-01']
-
-
-    df['date'] = pd.to_datetime(df['jour'], format='%Y-%m-%d')
-    df = df[df.date >= '2020-05-01']
+    df = df[df.date >= dt_deb]
 
     # Les nouveaux cas depuis 15 jours
     url = "https://www.data.gouv.fr/fr/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
@@ -88,8 +188,8 @@ def charge(local, nb_jours, ratio=10000):
     df_new['infos_dept'] = df_new['code_departement'] + " " + df_new['nom_departement']
 
     # Séparation Paris / hors Paris
-    df_hors_paris = df[df['nom_region'] != "Île-de-France"]
-    df_paris = df[df['nom_region'] == "Île-de-France"]
+    df_hors_paris = df[df['nom_region'] != "Ile-de-France"]
+    df_paris = df[df['nom_region'] == "Ile-de-France"]
 
     # Aggrégation niveau régions
     df_agg_reg = df[['nom_region','date','hosp','rea','rad','dc','population']].groupby(['nom_region','date']).aggregate('sum').reset_index()
@@ -112,8 +212,8 @@ def charge(local, nb_jours, ratio=10000):
 def plot_courbes_regions(df_type_data, Donnée, df_agg_reg, dict_labels, local, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0]
     fig = px.line(df_agg_reg, x="date", y=colonne, color="nom_region", labels=(dict_labels),
-                  hover_name="nom_region", 
-                  title='COVID 19 - Evolution par région - '+Donnée,
+                  hover_name="nom_region", width=1200, height=600,
+                  title='COVID-19 - Evolution par région - '+Donnée,
                   category_orders=({'nom_region': list(np.sort(df_agg_reg['nom_region'].unique()))}))
     fig.update_layout(title_x = 0.5)
     fig.update_yaxes(title_text=Donnée)
@@ -131,8 +231,8 @@ def plot_courbes_regions_ratio(df_type_data, Donnée, df_agg_reg, dict_labels, l
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_ratio"
     lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
     fig = px.line(df_agg_reg, x="date", y=colonne, color="nom_region", labels=(dict_labels),
-                  hover_name="nom_region", 
-                  title='COVID 19 - Evolution par région - '+Donnée+ ' : ratio pour '+lib_ratio+' habitants',
+                  hover_name="nom_region", width=1200, height=600,
+                  title='COVID-19 - Evolution par région - '+Donnée+ '<br> - ratio pour '+lib_ratio+' habitants -</br>',
                   category_orders=({'nom_region': list(np.sort(df_agg_reg['nom_region'].unique()))}))
     fig.update_layout(title_x = 0.5)
     fig.update_yaxes(title_text=Donnée + " pour " + lib_ratio)
@@ -146,7 +246,34 @@ def plot_courbes_regions_ratio(df_type_data, Donnée, df_agg_reg, dict_labels, l
 
 
 #----------------------------------------------------------------------------------------------------------------------------
-def plot_courbes_departements(df_type_data, Donnée, df, dict_labels, local, show='O'):
+def plot_courbes_departements(df_type_data, Donnée, df_plot, reg, dict_labels, local, show='O'):
+    colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0]    
+    fig = px.line(df_plot, x="date", y=colonne, color="nom_departement",  
+                      labels=(dict_labels), hover_name="nom_departement", 
+                      title="COVID-19 - Evolution pour la région " + reg + "<br> - "+ Donnée + " - </br>",
+                      width=1000, height=500, 
+                      category_orders=({'nom_departement': list(np.sort(df_plot['nom_departement'].unique()))})
+                 )             
+    fig.update_layout(title_x = 0.5, showlegend=True,
+                          legend=dict(font=dict(size=10)),
+                          margin=dict(b=0),
+                     )
+    fig.update_xaxes(title_text="")
+    fig.update_yaxes(title_text=Donnée)
+    fig.update_xaxes(showticklabels=True)
+    fig.update_yaxes(matches=None)
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+            
+    if show == 'O':
+        fig.show()
+    
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_'+colonne+'_'+reg+'.html', auto_open=False)
+
+    return fig, colonne
+
+#----------------------------------------------------------------------------------------------------------------------------
+def plot_courbes_departements_grid(df_type_data, Donnée, df, dict_labels, local, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0]
     fig = px.line(df, x="date", y=colonne, color="legend", facet_col='nom_region', facet_col_wrap=3,
                   labels=(dict_labels), hover_name="nom_departement", 
@@ -185,7 +312,36 @@ def plot_courbes_departements(df_type_data, Donnée, df, dict_labels, local, sho
 
 
 #----------------------------------------------------------------------------------------------------------------------------
-def plot_courbes_departements_ratio(df_type_data, Donnée, df, dict_labels, local, ratio=10000, show='O'):
+def plot_courbes_departements_ratio(df_type_data, Donnée, df_plot, reg, dict_labels, local, ratio=10000, show='O'):
+    colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_ratio"
+    lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
+
+    fig = px.line(df_plot, x="date", y=colonne, color="nom_departement",  
+                      labels=(dict_labels), hover_name="nom_departement", 
+                      title="COVID-19 - Evolution pour la région " + reg + "<br>- "+ Donnée+' : ratio pour '+lib_ratio+' habitants -</br> ',
+                      width=1000, height=500, 
+                      category_orders=({'nom_departement': list(np.sort(df_plot['nom_departement'].unique()))})
+                 )             
+    fig.update_layout(title_x = 0.5, showlegend=True,
+                          legend=dict(font=dict(size=10)),
+                          margin=dict(b=0),
+                     )
+    fig.update_xaxes(title_text="")
+    fig.update_yaxes(title_text=Donnée)
+    fig.update_xaxes(showticklabels=True)
+    fig.update_yaxes(matches=None)
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+
+    if show == 'O':
+        fig.show()
+    
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_'+colonne+'_ratio_'+reg+'.html', auto_open=False)
+
+    return fig, colonne
+
+#----------------------------------------------------------------------------------------------------------------------------
+def plot_courbes_departements_ratio_grid(df_type_data, Donnée, df, dict_labels, local, ratio=10000, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_ratio"
     lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
     fig = px.line(df, x="date", y=colonne, color="legend", facet_col='nom_region', facet_col_wrap=3,
@@ -224,15 +380,17 @@ def plot_courbes_departements_ratio(df_type_data, Donnée, df, dict_labels, loca
     return fig, colonne
 
 #----------------------------------------------------------------------------------------------------------------------------
-def plot_carte(df_type_data, Donnée, Zone, df_hors_paris, df_paris, geo, local, show='O'):
+def plot_carte(df_type_data, dte_deb, Donnée, Zone, df_hors_paris, df_paris, geo, local, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0]
+
     if Zone == 'Hors Paris':
         df_plot = df_hors_paris
-        lib_zone = "hors région Île-de-France"
+        lib_zone = "hors région Ile-de-France"
     else:
         df_plot = df_paris
-        lib_zone = "en région Île-de-France"
-        
+        lib_zone = "en région Ile-de-France"
+
+    df_plot = df_plot[df_plot.date >= dte_deb]    
     min = df_plot[colonne].min()
     max = df_plot[colonne].max()
 
@@ -251,14 +409,14 @@ def plot_carte(df_type_data, Donnée, Zone, df_hors_paris, df_paris, geo, local,
 
     fig.update_geos(fitbounds="locations", visible=False)
     fig.update_layout(
-        title_text = "COVID 19 - Evolution "+lib_zone+" : "+Donnée,
+        title_text = "COVID-19 - Evolution "+lib_zone+"<br>- "+Donnée + " -</br>",
         title_x = 0.5,
         geo=dict(
             showframe = False,
             showcoastlines = False,
             projection_type = 'mercator'),
-        width=800,
-        height=800,
+        width=600,
+        height=600,
         margin=dict(
             l= 0,
             r= 0,
@@ -266,7 +424,7 @@ def plot_carte(df_type_data, Donnée, Zone, df_hors_paris, df_paris, geo, local,
             #t= 0,
             pad= 2)
     )
-    fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 2000
+    fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
 
     if show == 'O':
         fig.show()
@@ -283,11 +441,11 @@ def plot_heatmap_regions(df_new_agg_reg, local, Zone, show='O'):
         df_plot = df_new_agg_reg.copy()
         titre = 'COVID-19 - Evolution des nouveaux cas par région sur les 15 derniers jours'
     if Zone == 'Hors Paris':
-        df_plot = df_new_agg_reg[df_new_agg_reg['nom_region'] != "Île-de-France"]
-        titre = 'COVID-19 - Evolution des nouveaux cas par région sur les 15 derniers jours - Hors région Île-de-France'
+        df_plot = df_new_agg_reg[df_new_agg_reg['nom_region'] != "Ile-de-France"]
+        titre = 'COVID-19 - Evolution des nouveaux cas par région sur les 15 derniers jours - Hors région Ile-de-France'
     if Zone == 'Paris':
-        df_plot = df_new_agg_reg[df_new_agg_reg['nom_region'] == "Île-de-France"]
-        titre = 'COVID-19 - Evolution des nouveaux cas en Île-de-France sur les 15 derniers jours'
+        df_plot = df_new_agg_reg[df_new_agg_reg['nom_region'] == "Ile-de-France"]
+        titre = 'COVID-19 - Evolution des nouveaux cas en Ile-de-France sur les 15 derniers jours'
 
     fig = make_subplots(rows=1, cols=6,
                         subplot_titles=("Nb quotidien de personnes : Hospitalisées", \
@@ -326,7 +484,7 @@ def plot_heatmap_regions(df_new_agg_reg, local, Zone, show='O'):
         colorbar = dict(x=0.97, title='Nb pers.', thickness=15)), row=1, col=5
     )
     fig.update_layout(title_text=titre, title_x=0.5,
-                    height=550, width=1500, margin=dict(l=0,r=0,b=50),#t=25),
+                    height=500, width=1100, margin=dict(l=0,r=0,b=50),#t=25),
                     xaxis=dict(
             domain=[0, 0.27]
         ),
@@ -356,11 +514,11 @@ def plot_heatmap_departements(df_new, local, Zone, show='O'):
         df_plot = df_new.copy()
         titre = 'COVID-19 - Evolution des nouveaux cas par région et département sur les 15 derniers jours'
     if Zone == 'Hors Paris':
-        df_plot = df_new[df_new['nom_region'] != "Île-de-France"]
-        titre = 'COVID-19 - Evolution des nouveaux cas par région et département sur les 15 derniers jours - Hors Île-de-France'
+        df_plot = df_new[df_new['nom_region'] != "Ile-de-France"]
+        titre = 'COVID-19 - Evolution des nouveaux cas par région et département sur les 15 derniers jours - Hors Ile-de-France'
     if Zone == 'Paris':
-        df_plot = df_new[df_new['nom_region'] == "Île-de-France"]    
-        titre = 'COVID-19 - Evolution des nouveaux cas en Île-de-France sur les 15 derniers jours'
+        df_plot = df_new[df_new['nom_region'] == "Ile-de-France"]    
+        titre = 'COVID-19 - Evolution des nouveaux cas en Ile-de-France sur les 15 derniers jours'
     
     fig = make_subplots(rows=1, cols=6,
                         subplot_titles=("Nb quotidien de personnes : Hospitalisées", \
@@ -399,7 +557,7 @@ def plot_heatmap_departements(df_new, local, Zone, show='O'):
         colorbar = dict(x=0.97, title='Nb pers.', thickness=15)), row=1, col=5
     )
     fig.update_layout(title_text=titre, title_x=0.5,
-                    height=2200, width=1700, margin=dict(l=0,r=0,b=50),#t=25),
+                    height=2200, width=1500, margin=dict(l=0,r=0,b=50),#t=25),
                     xaxis=dict(
             domain=[0, 0.27]
         ),
