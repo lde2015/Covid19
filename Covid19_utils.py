@@ -124,10 +124,11 @@ def charge(local, nb_jours, date_deb, ratio=10000):
     # Les méta données
     lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
     df_meta = pd.read_csv(local+'/Data/metadonnees-donnees-hospitalieres-covid19.csv', sep=';')
-    df_type_data = pd.DataFrame({'colonne': ['hosp','rea','rad','dc'], 
+    df_type_data = pd.DataFrame({#'colonne': ['hosp','rea','rad','dc'], 
+                                 'colonne': ['hosp','rea','dc'], 
                                 'type_data': ['Nb actuellement hospitalisés',
                                             'Nb actuellement en réanimation',
-                                            'Nb cumulé de retours à domicile',
+                                            #'Nb cumulé de retours à domicile',
                                             "Nb cumulé de décés à l'hôpital"]})
     dict_labels = {'legend':'Région - Département', 'nom_region':'Région', 'nom_departement': 'Département',
                 'date':'Date', 'hosp':'Nb actuellement hospitalisés','rea':'Nb actuellement en réanimation',
@@ -390,9 +391,10 @@ def plot_carte(df_type_data, dte_deb, Donnée, Zone, df_hors_paris, df_paris, ge
         df_plot = df_paris
         lib_zone = "en région Ile-de-France"
 
-    df_plot = df_plot[df_plot.date >= dte_deb]    
+    df_plot = df_plot[df_plot.date >= dte_deb][['jour','hosp','rea','date','code_departement','infos']]
     min = df_plot[colonne].min()
     max = df_plot[colonne].max()
+    print(df_plot.info())
 
     fig = px.choropleth(df_plot,
                         geojson=geo,
@@ -430,7 +432,7 @@ def plot_carte(df_type_data, dte_deb, Donnée, Zone, df_hors_paris, df_paris, ge
         fig.show()
     
     if local != ".":
-        fig.write_html(local+'/Output/Evol_'+colonne+'_'+Zone.replace(' ','_')+'.html', auto_open=False)
+        fig.write_html(local+'/Output/Evol_'+colonne+'_carte_'+Zone.replace(' ','_')+'.html', auto_open=False)
 
     return fig, colonne
 
