@@ -1,16 +1,12 @@
-# Import des librairies
 import pandas as pd
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.offline
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from ipywidgets import widgets
 import numpy as np
-from ipywidgets import interact
 import requests
-import pandas as pd
 import io
 
 
@@ -66,7 +62,6 @@ def charge_meta(local, nb_jours, ratio=10000):
 
     return df_type_data, df_new, df_new_agg_reg, dict_labels, geo, df_dept, df_pop_dept
 
-
 #----------------------------------------------------------------------------------------------------------------------------
 # Chargement des données
 def charge_data(date_deb, df_dept, df_pop_dept, ratio=10000):
@@ -114,7 +109,6 @@ def charge_data(date_deb, df_dept, df_pop_dept, ratio=10000):
     df_agg_reg['dc_ratio'] = df_agg_reg.apply(lambda x: np.round(x['dc']*ratio/x['population'], 2), axis=1)
 
     return df_agg_reg, df, df_hors_paris, df_paris
-
 
 #----------------------------------------------------------------------------------------------------------------------------
 # Chargement des meta données et des données
@@ -208,7 +202,6 @@ def charge(local, nb_jours, date_deb, ratio=10000):
 
     return df_type_data, df_agg_reg, df, df_hors_paris, df_paris, df_new, df_new_agg_reg, dict_labels, geo
 
-
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_courbes_regions(df_type_data, Donnée, df_agg_reg, dict_labels, local, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0]
@@ -225,7 +218,6 @@ def plot_courbes_regions(df_type_data, Donnée, df_agg_reg, dict_labels, local, 
     if local != ".":
         fig.write_html(local+'/Output/Evol_'+colonne+'_par_region.html', auto_open=False)
     return fig, colonne
-
 
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_courbes_regions_ratio(df_type_data, Donnée, df_agg_reg, dict_labels, local, ratio=10000, show='O'):
@@ -245,14 +237,13 @@ def plot_courbes_regions_ratio(df_type_data, Donnée, df_agg_reg, dict_labels, l
         fig.write_html(local+'/Output/Evol_'+colonne+'_ratio_par_region.html', auto_open=False)
     return fig, colonne
 
-
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_courbes_departements(df_type_data, Donnée, df_plot, reg, dict_labels, local, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0]    
     fig = px.line(df_plot, x="date", y=colonne, color="nom_departement",  
                       labels=(dict_labels), hover_name="nom_departement", 
                       title="COVID-19 - Evolution pour la région " + reg + "<br> - "+ Donnée + " - </br>",
-                      width=1000, height=500, 
+                      width=1200, height=600, 
                       category_orders=({'nom_departement': list(np.sort(df_plot['nom_departement'].unique()))})
                  )             
     fig.update_layout(title_x = 0.5, showlegend=True,
@@ -311,7 +302,6 @@ def plot_courbes_departements_grid(df_type_data, Donnée, df, dict_labels, local
 
     return fig, colonne
 
-
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_courbes_departements_ratio(df_type_data, Donnée, df_plot, reg, dict_labels, local, ratio=10000, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_ratio"
@@ -320,7 +310,7 @@ def plot_courbes_departements_ratio(df_type_data, Donnée, df_plot, reg, dict_la
     fig = px.line(df_plot, x="date", y=colonne, color="nom_departement",  
                       labels=(dict_labels), hover_name="nom_departement", 
                       title="COVID-19 - Evolution pour la région " + reg + "<br>- "+ Donnée+' : ratio pour '+lib_ratio+' habitants -</br> ',
-                      width=1000, height=500, 
+                      width=1200, height=600, 
                       category_orders=({'nom_departement': list(np.sort(df_plot['nom_departement'].unique()))})
                  )             
     fig.update_layout(title_x = 0.5, showlegend=True,
@@ -383,18 +373,22 @@ def plot_courbes_departements_ratio_grid(df_type_data, Donnée, df, dict_labels,
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_carte(df_type_data, dte_deb, Donnée, Zone, df_hors_paris, df_paris, geo, local, show='O'):
     colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0]
-
+    
     if Zone == 'Hors Paris':
         df_plot = df_hors_paris
         lib_zone = "hors région Ile-de-France"
-    else:
+    elif Zone == 'Paris':
         df_plot = df_paris
         lib_zone = "en région Ile-de-France"
+    else:
+        df_plot = pd.concat([df_hors_paris, df_paris], ignore_index=True)
+        lib_zone = 'en France'
 
-    df_plot = df_plot[df_plot.date >= dte_deb][['jour','hosp','rea','date','code_departement','infos']]
+    df_plot = df_plot[df_plot.date >= dte_deb][['jour','hosp','rea','dc', \
+                                                'hosp_ratio','rea_ratio','dc_ratio', \
+                                                'date','code_departement','infos']]
     min = df_plot[colonne].min()
     max = df_plot[colonne].max()
-    print(df_plot.info())
 
     fig = px.choropleth(df_plot,
                         geojson=geo,
@@ -411,20 +405,20 @@ def plot_carte(df_type_data, dte_deb, Donnée, Zone, df_hors_paris, df_paris, ge
 
     fig.update_geos(fitbounds="locations", visible=False)
     fig.update_layout(
-        title_text = "COVID-19 - Evolution "+lib_zone+"<br>- "+Donnée + " -</br>",
-        title_x = 0.5,
+        title_text = "COVID-19 - Evolution sur les 15 derniers jours "+lib_zone+"<br>- "+Donnée + " -</br>",
+        title_x = 0.5, 
         geo=dict(
             showframe = False,
             showcoastlines = False,
             projection_type = 'mercator'),
-        width=600,
+        width=700,
         height=600,
         margin=dict(
             l= 0,
             r= 0,
             b= 0,
             #t= 0,
-            pad= 2)
+            pad= 4)
     )
     fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
 
@@ -436,7 +430,66 @@ def plot_carte(df_type_data, dte_deb, Donnée, Zone, df_hors_paris, df_paris, ge
 
     return fig, colonne
 
+#----------------------------------------------------------------------------------------------------------------------------
+def plot_carte_ratio(df_type_data, dte_deb, Donnée, Zone, df_hors_paris, df_paris, geo, local, ratio=10000, show='O'):
+    colonne = df_type_data[df_type_data.type_data == Donnée]['colonne'].reset_index(drop=True)[0] + "_ratio"
+    lib_ratio = s='{:,}'.format(ratio).replace(',', '.')
+    
+    if Zone == 'Hors Paris':
+        df_plot = df_hors_paris
+        lib_zone = "hors région Ile-de-France"
+    elif Zone == 'Paris':
+        df_plot = df_paris
+        lib_zone = "en région Ile-de-France"
+    else:
+        df_plot = pd.concat([df_hors_paris, df_paris], ignore_index=True)
+        lib_zone = 'en France'
 
+    df_plot = df_plot[df_plot.date >= dte_deb][['jour','hosp','rea','dc', \
+                                                'hosp_ratio','rea_ratio','dc_ratio', \
+                                                'date','code_departement','infos']]
+    min = df_plot[colonne].min()
+    max = df_plot[colonne].max()
+
+    fig = px.choropleth(df_plot,
+                        geojson=geo,
+                        locations="code_departement", 
+                        featureidkey="properties.code",
+                        color=colonne,
+                        animation_frame="jour",
+                        hover_name="infos",
+                        color_continuous_scale=px.colors.sequential.RdBu_r,
+                        range_color=[min, max],
+                        labels={'hosp':'Nb personnes', 'rea':'Nb personnes', 'rad':'Nb personnes',
+                                'dc':'Nb personnes'}
+                       )
+
+    fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_layout(
+        title_text = "COVID-19 - Evolution sur les 15 derniers jours "+lib_zone+"<br>- "+Donnée+' : ratio pour '+lib_ratio+' habitants -</br> ',
+        title_x = 0.5, 
+        geo=dict(
+            showframe = False,
+            showcoastlines = False,
+            projection_type = 'mercator'),
+        width=700,
+        height=600,
+        margin=dict(
+            l= 0,
+            r= 0,
+            b= 0,
+            #t= 0,
+            pad= 4)
+    )
+    fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
+
+    if show == 'O':
+        fig.show()
+    
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_'+colonne+'_ratio_carte_'+Zone.replace(' ','_')+'.html', auto_open=False)
+
+    return fig, colonne
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_heatmap_regions(df_new_agg_reg, local, Zone, show='O'):
     if Zone == 'Tout':
@@ -486,7 +539,7 @@ def plot_heatmap_regions(df_new_agg_reg, local, Zone, show='O'):
         colorbar = dict(x=0.97, title='Nb pers.', thickness=15)), row=1, col=5
     )
     fig.update_layout(title_text=titre, title_x=0.5,
-                    height=500, width=1100, margin=dict(l=0,r=0,b=50),#t=25),
+                    height=500, width=1200, margin=dict(l=0,r=0,b=50),#t=25),
                     xaxis=dict(
             domain=[0, 0.27]
         ),
@@ -509,7 +562,6 @@ def plot_heatmap_regions(df_new_agg_reg, local, Zone, show='O'):
 
     return fig
     
-
 #----------------------------------------------------------------------------------------------------------------------------
 def plot_heatmap_departements(df_new, local, Zone, show='O'):
     if Zone == 'Tout':
@@ -559,7 +611,7 @@ def plot_heatmap_departements(df_new, local, Zone, show='O'):
         colorbar = dict(x=0.97, title='Nb pers.', thickness=15)), row=1, col=5
     )
     fig.update_layout(title_text=titre, title_x=0.5,
-                    height=2200, width=1500, margin=dict(l=0,r=0,b=50),#t=25),
+                    height=2200, width=1200, margin=dict(l=0,r=0,b=50),#t=25),
                     xaxis=dict(
             domain=[0, 0.27]
         ),
@@ -575,5 +627,70 @@ def plot_heatmap_departements(df_new, local, Zone, show='O'):
     
     if local != ".":
         fig.write_html(local+'/Output/Evol_Nouveaux_Cas_Départements_'+Zone.replace(' ','_')+'.html', auto_open=False)
+
+    return fig
+
+#----------------------------------------------------------------------------------------------------------------------------
+def plot_heatmap_1region(df_plot, reg, local, show='O'):
+    titre = 'COVID-19 - Evolution des nouveaux cas sur les 15 derniers jours - région '+reg
+    nb_depts = len(df_plot['code_departement'].unique())
+    
+    fig = make_subplots(rows=1, cols=6,
+                        subplot_titles=("   Nb quotidien de personnes : Hospitalisées", \
+                                        "                         Admises en réanimation", \
+                                        "                Décédées"),
+                        specs=[[{}, None, {}, None, {}, None]],
+                        shared_yaxes=True)
+
+    fig.add_trace(go.Heatmap(
+        z=df_plot['incid_hosp'],
+        x=df_plot['date'],
+        y=df_plot['nom_departement'],
+        name="Hosp. +",
+        colorscale='RdBu',
+        reversescale=True,
+        colorbar = dict(x=0.27, title='Nb pers.', thickness=15)), row=1, col=1
+    )
+
+    fig.add_trace(go.Heatmap(
+        z=df_plot['incid_rea'],
+        x=df_plot['date'],
+        y=df_plot['nom_departement'],
+        name="Réa. +",
+        colorscale='RdBu',
+        reversescale=True,
+        colorbar = dict(x=0.62, title='Nb pers.', thickness=15)), row=1, col=3
+    )
+
+    fig.add_trace(go.Heatmap(
+        z=df_plot['incid_dc'],
+        x=df_plot['date'],
+        y=df_plot['nom_departement'],
+        name="Décès +",
+        colorscale='RdBu',
+        reversescale=True,
+        colorbar = dict(x=0.97, title='Nb pers.', thickness=15)), row=1, col=5
+    )
+    fig.update_layout(title_text=titre, title_x=0.5, 
+                    height=500, width=1200, margin=dict(l=0,r=0,b=50),#t=25),
+                    xaxis=dict(
+            domain=[0, 0.27]
+        ),
+        xaxis2=dict(
+            domain=[0.35, 0.62]
+        ),
+        xaxis3=dict(
+            domain=[0.7, 0.97]
+        ))
+
+    fig['layout']['yaxis']['autorange'] = "reversed"
+    fig['layout']['yaxis2']['autorange'] = "reversed"
+    fig['layout']['yaxis3']['autorange'] = "reversed"
+
+    if show == 'O':
+        fig.show()
+    
+    if local != ".":
+        fig.write_html(local+'/Output/Evol_Nouveaux_Cas_Région_'+reg.replace(' ','_')+'.html', auto_open=False)
 
     return fig
